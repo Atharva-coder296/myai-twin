@@ -1,29 +1,25 @@
 import streamlit as st
-import openai
+from openai import OpenAI
 
-st.set_page_config(page_title="MyAI Twin", layout="centered")
+# Securely load your OpenAI API key from Streamlit secrets
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.title("🧠 MyAI Twin")
-st.caption("Your Personal AI Assistant & Digital Twin")
+st.set_page_config(page_title="MyAI Twin", page_icon="🤖")
+st.title("👤 MyAI Twin - Your Personal AI Clone")
 
-openai.api_key = st.text_input("🔐 Enter your OpenAI API Key", type="password")
+st.markdown("Talk to your digital twin. Ask anything, anytime.")
 
-user_input = st.text_area("🗣️ What do you want to talk about?", "")
+user_input = st.text_input("You:", "")
 
-if st.button("Ask MyAI Twin"):
-    if not openai.api_key:
-        st.warning("Please enter your OpenAI API key first!")
-    elif user_input.strip() == "":
-        st.warning("Please type something first.")
-    else:
-        with st.spinner("Thinking..."):
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "system", "content": "You are a helpful and intelligent AI Twin of the user."},
-                          {"role": "user", "content": user_input}]
-            )
-            st.success("Here's what I think:")
-            st.markdown(response['choices'][0]['message']['content'])
+if user_input:
+    with st.spinner("Thinking like you..."):
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful and intelligent AI Twin of the user."},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        reply = response.choices[0].message.content
+        st.markdown(f"**MyAI Twin:** {reply}")
 
-st.markdown("---")
-st.caption("🧪 Made by Atharva • Powered by OpenAI • Streamlit Deployment")
