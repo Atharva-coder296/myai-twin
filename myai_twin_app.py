@@ -1,18 +1,17 @@
 import streamlit as st
 from openai import OpenAI
 
-# Securely load your OpenAI API key from Streamlit secrets
+# Securely load API Key from secrets
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.set_page_config(page_title="MyAI Twin", page_icon="🤖")
-st.title("👤 MyAI Twin - Your Personal AI Clone")
+st.set_page_config(page_title="MyAI Twin", layout="centered")
+st.title("🧠 MyAI Twin")
+st.write("Your AI-powered digital twin to talk, learn, and grow with you!")
 
-st.markdown("Talk to your digital twin. Ask anything, anytime.")
-
-user_input = st.text_input("You:", "")
+user_input = st.text_input("Talk to your AI Twin 👇")
 
 if user_input:
-    with st.spinner("Thinking like you..."):
+    with st.spinner("Thinking... 🤔"):
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -20,6 +19,4 @@ if user_input:
                 {"role": "user", "content": user_input}
             ]
         )
-        reply = response.choices[0].message.content
-        st.markdown(f"**MyAI Twin:** {reply}")
-
+        st.success(response.choices[0].message.content)
