@@ -12,6 +12,7 @@ workflows:
          flutter create --platforms=android,ios --org com.retailsaudit --project-name app --no-pub .
           rm -f test/widget_test.dart
           flutter pub get
+          flutter pub upgrade file_picker
       - name: Validate Flutter source
         script: |
           flutter analyze --no-fatal-infos --no-fatal-warnings
