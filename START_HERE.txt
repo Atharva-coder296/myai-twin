@@ -1,0 +1,37 @@
+RETAILSAUDIT — FIRST FLUTTER PROJECT
+==================================
+
+You now have source code for the Android + iPhone RetailSAudit mobile app.
+It is a LOCAL DEMO version, not yet a published app or a live cloud system.
+
+Mac setup:
+1. Install Flutter SDK, Xcode, and Android Studio.
+2. Extract RetailSAudit_Flutter.zip to your Mac.
+3. Open Mac Terminal in the extracted project folder.
+4. Run these commands (one at a time):
+
+   flutter doctor
+   flutter create --project-name retailsaudit --platforms=android,ios .
+   flutter pub get
+   flutter analyze
+   flutter test
+   flutter run
+
+5. On first launch, choose a NEW password privately in the app.
+   Your primary admin ID is RetailSAudit.
+   Your admin/report email is retailsaudit@gmail.com.
+6. Connect and test the physical scanner on Android and iPhone.
+
+SECURITY: The app currently saves local demo accounts and audit data only
+on the device. Do not deploy to employees until central Firebase auth,
+secure cloud backup and role rules are implemented and verified.
+
+AUTOMATIC EMAIL: Not active in this local MVP. You can share all three
+Excel report files using the phone's share sheet. The firebase/ folder is
+server-side starter source for the next production development phase.
+
+Publishing requires developer account access owned by the business,
+platform signing and review. I cannot access or create those accounts
+without your authorized sign-in and payment verification.
+
+READ README.md AND RELEASE_CHECKLIST.md FOR THE FULL PLAN.
