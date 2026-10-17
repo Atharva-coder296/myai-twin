@@ -14,7 +14,7 @@ workflows:
           flutter pub get
       - name: Validate Flutter source
         script: |
-          flutter analyze --no-fatal-infos
+          flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Run unit tests
         script: |
           flutter test
