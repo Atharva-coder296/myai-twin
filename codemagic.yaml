@@ -9,7 +9,8 @@ workflows:
     scripts:
       - name: Generate missing Flutter Android and iOS project files
         script: |
-          flutter create --platforms=android,ios --org com.retailsaudit --project-name app .
+         flutter create --platforms=android,ios --org com.retailsaudit --project-name app --no-pub .
+          rm -f test/widget_test.dart
           flutter pub get
       - name: Validate Flutter source
         script: |
