@@ -1,0 +1,25 @@
+workflows:
+  retailsaudit-android-debug:
+    name: RetailSAudit Android first build
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+    scripts:
+      - name: Generate missing Flutter Android and iOS project files
+        script: |
+          flutter create --platforms=android,ios --org com.retailsaudit --project-name app .
+          flutter pub get
+      - name: Validate Flutter source
+        script: |
+          flutter analyze --no-fatal-infos
+      - name: Run unit tests
+        script: |
+          flutter test
+      - name: Build Android debug APK
+        script: |
+          flutter build apk --debug
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - flutter_drive.log

@@ -1,0 +1,21 @@
+# Release checklist — RetailSAudit
+
+- [ ] Install Flutter SDK, Android Studio and Xcode on the Mac.
+- [ ] Run `flutter create --project-name retailsaudit --platforms=android,ios .`.
+- [ ] Run `flutter pub get`, `flutter analyze` and `flutter test`.
+- [ ] Build/run Android and iOS on real devices.
+- [ ] Test 2D hardware scanner on each device (QR numeric / EAN13 / short / long).
+- [ ] Verify mismatch modal blocks scanning and Yes/No/Modify outcomes.
+- [ ] Test 100 consecutive scans, duplicate counts, rack separation, loss of focus.
+- [ ] Check autosave by killing and reopening the app mid-audit.
+- [ ] Validate SOH and audit XLSX imports/exports with real company spreadsheets.
+- [ ] Create an owned Firebase project; enable cloud services and billing if needed.
+- [ ] Replace local login with Firebase Auth and server-enforced admin roles.
+- [ ] Seed primary admin securely with a new private password.
+- [ ] Add encrypted offline storage + cloud sync + recovery behavior.
+- [ ] Implement and test automatic report emails with 3 attachments.
+- [ ] Add backend audit logs and email delivery/retry monitoring.
+- [ ] Create app icon, screenshots, official company name and support privacy policy.
+- [ ] Set Android app ID, signing keys, Play Console developer account.
+- [ ] Set iOS bundle ID, Apple Developer team, signing and App Store Connect.
+- [ ] TestFlight and internal Android release → production approval.
