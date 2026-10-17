@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/widgets.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
@@ -40,7 +41,7 @@ class AuditFiles {
 
   static String _cellString(CellValue? value) {
     if (value == null) return '';
-    if (value is TextCellValue) return value.value;
+    if (value is TextCellValue) return value.value.toPlainText();
     if (value is IntCellValue) return value.value.toString();
     if (value is DoubleCellValue) {
       final v = value.value;
