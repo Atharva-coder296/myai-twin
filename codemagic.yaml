@@ -3,25 +3,85 @@ workflows:
     name: RetailSAudit Android first build
     instance_type: mac_mini_m2
     max_build_duration: 60
+
     environment:
       flutter: stable
       xcode: latest
+
     scripts:
-      - name: Generate missing Flutter Android and iOS project files
+      - name: Generate Flutter project files
         script: |
-         flutter create --platforms=android,ios --org com.retailsaudit --project-name app --no-pub .
+          flutter create --platforms=android,ios --org com.retailsaudit --project-name app --no-pub .
           rm -f test/widget_test.dart
           flutter pub get
           flutter pub upgrade file_picker
+
+      - name: Set RetailSAudit name and icon
+        script: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          import sys
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          if not manifest.exists():
+              sys.exit("AndroidManifest.xml not found")
+
+          text = manifest.read_text()
+          text = text.replace(
+              'android:label="app"',
+              'android:label="RetailSAudit"'
+          )
+          text = text.replace(
+              'android:label="${applicationName}"',
+              'android:label="RetailSAudit"'
+          )
+          manifest.write_text(text)
+
+          source = Path("assets/retailsaudit_logo.png")
+          if not source.exists():
+              sys.exit(
+                  "Missing assets/retailsaudit_logo.png. "
+                  "Upload the official logo to GitHub first."
+              )
+
+          from PIL import Image
+
+          sizes = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192,
+          }
+
+          with Image.open(source) as original:
+              logo = original.convert("RGBA")
+              for folder, size in sizes.items():
+                  destination = Path(
+                      "android/app/src/main/res"
+                  ) / folder
+                  destination.mkdir(parents=True, exist_ok=True)
+                  logo.resize(
+                      (size, size),
+                      Image.Resampling.LANCZOS
+                  ).save(destination / "ic_launcher.png")
+
+          print("RetailSAudit name and icon configured")
+          PY
+
       - name: Validate Flutter source
         script: |
           flutter analyze --no-fatal-infos --no-fatal-warnings
+
       - name: Run unit tests
         script: |
           flutter test
+
       - name: Build Android debug APK
         script: |
           flutter build apk --debug
+
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - flutter_drive.log
