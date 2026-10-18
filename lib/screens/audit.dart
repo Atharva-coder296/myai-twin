@@ -103,10 +103,11 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
   final scanFocus = FocusNode();
   Timer? idleTimer;
   bool resolving = false;
-  bool manualKeyboard = false;
+  bool dialogOpen = false;
   late int rackIndex;
   int acceptedScans = 0;
   String status = 'Scanner ready';
+  String? lastSavedBarcode;
 
   Audit get audit => widget.existingReport ?? widget.store.draft!;
   RackCount get rack => audit.racks[rackIndex];
@@ -122,7 +123,7 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
   }
 
   void _refocus() {
-    if (mounted && !resolving && scanFocus.canRequestFocus) scanFocus.requestFocus();
+    if (mounted && !resolving && !dialogOpen && scanFocus.canRequestFocus) scanFocus.requestFocus();
   }
 
   @override
@@ -131,7 +132,7 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
   }
 
   void _onInputChanged(String value) {
-    if (resolving) return;
+    if (resolving || dialogOpen) return;
     idleTimer?.cancel();
     if (value.contains('\n') || value.contains('\r')) {
       _commit(value);
@@ -142,7 +143,7 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
   }
 
   void _commit(String received) {
-    if (resolving || !mounted) return;
+    if (resolving || dialogOpen || !mounted) return;
     idleTimer?.cancel();
     scanInput.clear(); // Important: never leave scans accumulating in the input field.
     final chunks = received.split(RegExp(r'[\r\n]+'))
@@ -194,7 +195,10 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
         }
         if (!mounted) return;
         acceptedScans++;
-        setState(() => status = 'Saved $code · ${rack.units} units in this rack');
+        setState(() {
+          lastSavedBarcode = code;
+          status = 'Saved $code · ${rack.units} units in this rack';
+        });
         if (widget.store.successSound) SystemSound.play(SystemSoundType.click);
         if (widget.store.vibration) HapticFeedback.mediumImpact();
       }
@@ -258,40 +262,128 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
     return result;
   }
 
+  Future<void> _typeBarcodeManually() async {
+    idleTimer?.cancel();
+    scanInput.clear();
+    scanFocus.unfocus();
+    dialogOpen = true;
+    final barcodeController = TextEditingController();
+    try {
+      final code = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Enter Barcode Manually'),
+          content: TextField(
+            controller: barcodeController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Numeric barcode',
+              hintText: 'Type or paste barcode',
+            ),
+            onSubmitted: (value) =>
+                Navigator.pop(dialogContext, value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                dialogContext, barcodeController.text.trim()),
+              child: const Text('Add Item'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (code != null && code.isNotEmpty) {
+        dialogOpen = false;
+        await _processQueued([code]);
+      }
+    } finally {
+      dialogOpen = false;
+      barcodeController.dispose();
+      if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _refocus());
+    }
+  }
+
   Future<void> _addLocation() async {
     idleTimer?.cancel();
     scanInput.clear();
+    scanFocus.unfocus();
+    dialogOpen = true;
     final location = TextEditingController();
     final auditor = TextEditingController(text: rack.auditor);
-    final values = await showDialog<(String, String)>(context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Add Rack Location'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: location,
-            decoration: const InputDecoration(labelText: 'Scan or type rack location')),
-          const SizedBox(height: 12),
-          TextField(controller: auditor,
-            decoration: const InputDecoration(labelText: 'Auditor (keep or change)')),
-        ]),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext),
-          child: const Text('Cancel')),
-          FilledButton(onPressed: () {
-            if (location.text.trim().isEmpty || auditor.text.trim().isEmpty) return;
-            Navigator.pop(dialogContext, (location.text.trim(), auditor.text.trim()));
-          }, child: const Text('Add Location'))],
-      ));
-    location.dispose(); auditor.dispose();
-    if (values == null || !mounted) { _refocus(); return; }
-    if (editingExisting) {
-      audit.racks.add(RackCount(id: newId(), rack: values.$1,
-        auditor: values.$2, date: today()));
-      await widget.store.save();
-    } else {
-      await widget.store.addRack(values.$1, values.$2);
+    try {
+      final values = await showDialog<(String, String)>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Add Rack Location'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: location,
+                autofocus: true,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Scan or type rack location'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: auditor,
+                decoration: const InputDecoration(
+                  labelText: 'Auditor (keep or change)'),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (location.text.trim().isEmpty ||
+                    auditor.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Enter location and auditor')));
+                  return;
+                }
+                Navigator.pop(dialogContext,
+                    (location.text.trim(), auditor.text.trim()));
+              },
+              child: const Text('Add Location'),
+            ),
+          ],
+        ),
+      );
+      if (values == null || !mounted) return;
+      if (editingExisting) {
+        audit.racks.add(RackCount(
+          id: newId(), rack: values.$1,
+          auditor: values.$2, date: today(),
+        ));
+        await widget.store.save();
+      } else {
+        await widget.store.addRack(values.$1, values.$2);
+      }
+      if (!mounted) return;
+      setState(() {
+        rackIndex = audit.racks.length - 1;
+        lastSavedBarcode = null;
+        status = 'Location added: ${values.$1}';
+      });
+    } catch (e) {
+      if (mounted) showFailure(context, e);
+    } finally {
+      dialogOpen = false;
+      location.dispose();
+      auditor.dispose();
+      if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _refocus());
     }
-    if (!mounted) return;
-    setState(() { rackIndex = audit.racks.length - 1; status = 'Ready for new rack'; });
-    _refocus();
   }
 
   Future<void> _editRow(int index) async {
@@ -379,7 +471,7 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
               onChanged: resolving ? null : (i) {
                 if (i == null) return;
                 idleTimer?.cancel(); scanInput.clear();
-                setState(() => rackIndex = i);
+                setState(() { rackIndex = i; lastSavedBarcode = null; });
                 if (!editingExisting) widget.store.setActiveDraftRack(i);
                 _refocus();
               }),
@@ -396,7 +488,7 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
               style: TextStyle(fontSize: 12)),
             const SizedBox(height: 12),
             TextField(controller: scanInput, focusNode: scanFocus, enabled: !resolving,
-              autofocus: true, keyboardType: manualKeyboard ? TextInputType.number : TextInputType.none,
+              autofocus: true, keyboardType: TextInputType.none,
               decoration: InputDecoration(prefixIcon: const Icon(Icons.qr_code_scanner),
                 labelText: resolving ? 'Waiting for EAN decision…' : 'Scanner Ready — Scan Here',
                 border: const OutlineInputBorder()),
@@ -404,11 +496,11 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
               onSubmitted: _commit),
             const SizedBox(height: 9),
             Text(status, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-            TextButton.icon(onPressed: resolving ? null : () {
-              setState(() => manualKeyboard = !manualKeyboard);
-              WidgetsBinding.instance.addPostFrameCallback((_) => _refocus());
-            }, icon: const Icon(Icons.keyboard_outlined),
-              label: Text(manualKeyboard ? 'Use hardware scanner mode' : 'Type a barcode manually')), 
+            TextButton.icon(
+              onPressed: resolving ? null : _typeBarcodeManually,
+              icon: const Icon(Icons.keyboard_outlined),
+              label: const Text('Type a barcode manually'),
+            ), 
             if (resolving) const LinearProgressIndicator(),
           ]))),
         Row(children: [
@@ -419,7 +511,16 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
             icon: const Icon(Icons.save), label: Text(editingExisting ? 'Save Changes' : 'End Audit'))),
         ]),
         const SizedBox(height: 12),
-        Text('Location Inventory Sheet', style: Theme.of(context).textTheme.titleLarge),
+        if (lastSavedBarcode != null) Card(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          child: ListTile(
+            leading: const Icon(Icons.check_circle),
+            title: Text('Last saved: $lastSavedBarcode'),
+            subtitle: Text('Location: ${rack.rack}'),
+            trailing: Text('Qty: ${rack.rows.where((r) => r.barcode == lastSavedBarcode).fold<int>(0, (sum, r) => sum + r.quantity)}'),
+          ),
+        ),
+        Text('Location Inventory Sheet — ${rack.rack}', style: Theme.of(context).textTheme.titleLarge),
         Text('${rack.rows.length} unique products · ${rack.units} units · $acceptedScans new scans'),
         const SizedBox(height: 7),
         if (rack.rows.isEmpty) emptyView('Scanned products will appear here.'),
