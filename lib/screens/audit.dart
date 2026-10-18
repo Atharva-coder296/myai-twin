@@ -524,33 +524,36 @@ Future<void> _addLocation() async {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${audit.brand} · ${audit.storeCode}',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 5),
-            Text('Expected barcode length: ${audit.eanLength} · ${audit.date}'),
-            const SizedBox(height: 8),
-            DropdownButton<int>(value: rackIndex, isExpanded: true,
-              items: [for (var i = 0; i < audit.racks.length; i++)
-                DropdownMenuItem(value: i, child: Text(audit.racks[i].rack))],
-              onChanged: resolving ? null : (i) {
-                if (i == null) return;
-                idleTimer?.cancel(); scanInput.clear();
-                setState(() { rackIndex = i; lastSavedBarcode = null; });
-                if (!editingExisting) widget.store.setActiveDraftRack(i);
-                _refocus();
-              }),
-            Text('Auditor: ${rack.auditor} · ${rack.date}'),
-          ]))),
-        const SizedBox(height: 12),
+      DropdownButton<int>(
+  value: rackIndex,
+  isExpanded: true,
+  items: [
+    for (var i = 0; i < audit.racks.length; i++)
+      DropdownMenuItem(
+        value: i,
+        child: Text(audit.racks[i].rack),
+      ),
+  ],
+  onChanged: resolving ? null : (i) {
+    if (i == null) return;
+    idleTimer?.cancel();
+    scanInput.clear();
+    setState(() {
+      rackIndex = i;
+      lastSavedBarcode = null;
+    });
+    if (!editingExisting) {
+      widget.store.setActiveDraftRack(i);
+    }
+    _refocus();
+  },
+),
+Text('Auditor: ${rack.auditor} · ${rack.date}'),
+]))),
+const SizedBox(height: 12),
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('BARCODE / NUMERIC QR SCANNER',
-              style: TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 5),
-            const Text('Tap the field once. Your 2D USB/Bluetooth scanner should '
-              'send Enter after each scan. QR codes containing numeric product IDs work too.',
-              style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 12),
+          
             TextField(controller: scanInput, focusNode: scanFocus, enabled: !resolving,
               autofocus: true, keyboardType: TextInputType.none,
               decoration: InputDecoration(prefixIcon: const Icon(Icons.qr_code_scanner),
