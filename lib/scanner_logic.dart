@@ -1,4 +1,4 @@
-/// Pure, testable rules for numerical barcode/QR input and EAN mismatches.
+/// Pure, testable rules for barcode/QR input and EAN mismatches.
 /// These rules do not read hardware. A keyboard-wedge HID scanner sends text,
 /// and the Flutter scan screen commits a completed value on Enter or idle.
 enum EanDecision { acceptOnce, reject, modifyExpectedLength }
@@ -7,7 +7,7 @@ class ScanCheck {
   final String value;
   final int expectedLength;
   const ScanCheck(this.value, this.expectedLength);
-  bool get isNumeric => RegExp(r'^\d+$').hasMatch(value);
+  bool get isNumeric => value.trim().isNotEmpty;
   bool get lengthMatches => value.length == expectedLength;
   bool get needsDecision => isNumeric && !lengthMatches;
 }

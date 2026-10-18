@@ -1,3 +1,4 @@
+import 'camera_scan.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -161,7 +162,7 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
         if (!mounted) return;
         final check = ScanCheck(code, audit.eanLength);
         if (!check.isNumeric) {
-          setState(() => status = 'Rejected: QR/barcode must contain a numeric product ID');
+          setState(() => status = 'Rejected: Barcode cannot be empty');
           continue;
         }
         if (check.needsDecision) {
@@ -169,6 +170,7 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
           final decision = await _askMismatch(code);
           if (!mounted) return;
           if (decision == 'reject') {
+            if (widget.store.mismatchSound) await _tripleAlert();
             setState(() => status = 'Rejected $code');
             continue;
           }
@@ -213,7 +215,7 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
   }
 
   Future<String> _askMismatch(String code) async {
-    if (widget.store.mismatchSound) _tripleAlert();
+    
     if (widget.store.vibration) HapticFeedback.heavyImpact();
     final choice = await showDialog<String>(
       context: context, barrierDismissible: false,
@@ -450,6 +452,68 @@ Future<void> _addLocation() async {
     }
   }
 }
+  Future<void> _deleteLocation() async {
+    if (resolving || dialogOpen) return;
+    if (audit.racks.length <= 1) {
+      showFailure(context, 'At least one location must remain');
+      return;
+    }
+    dialogOpen = true;
+    idleTimer?.cancel();
+    scanFocus.unfocus();
+    try {
+      final yes = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+        title: const Text('Delete location?'),
+        content: Text('Delete ${rack.rack} and all its scanned products?'),
+        actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('No')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Yes, delete'))]));
+      if (yes == true) {
+        await widget.store.deleteRack(audit, rackIndex);
+        if (mounted) setState(() { rackIndex = rackIndex.clamp(0, audit.racks.length - 1).toInt(); lastSavedBarcode = null; });
+        if (!editingExisting) await widget.store.setActiveDraftRack(rackIndex);
+      }
+    } finally { dialogOpen = false; _refocus(); }
+  }
+
+  Future<void> _quantitySheet(int index) async {
+    if (resolving || dialogOpen) return;
+    dialogOpen = true;
+    scanFocus.unfocus();
+    idleTimer?.cancel();
+    var amount = rack.rows[index].quantity;
+    var remove = false;
+    try {
+      final saved = await showDialog<int>(context: context, builder: (c) => StatefulBuilder(
+        builder: (c, update) => AlertDialog(
+          title: Text('Quantity · ${rack.rows[index].barcode}'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Row(children: [
+              IconButton.filled(onPressed: () => update(() { if (amount > 0) amount--; }), icon: const Icon(Icons.remove)),
+              Expanded(child: Text('$amount', textAlign: TextAlign.center,
+                style: Theme.of(c).textTheme.headlineLarge)),
+              IconButton.filled(onPressed: () => update(() => amount++), icon: const Icon(Icons.add)),
+            ]),
+            TextButton.icon(onPressed: () { remove = true; Navigator.pop(c, -1); },
+              icon: const Icon(Icons.delete_outline), label: const Text('Remove from list')),
+          ]),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(c, amount), child: const Text('Save'))],
+        )));
+      if (saved == null || !mounted) return;
+      if (remove) {
+        final yes = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+          title: const Text('Remove barcode?'),
+          content: const Text('Remove this barcode from the inventory list?'),
+          actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('No')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Yes, remove'))]));
+        if (yes != true) return;
+        rack.rows.removeAt(index);
+      } else { rack.rows[index].quantity = saved; }
+      await widget.store.save();
+      if (mounted) setState(() {});
+    } finally { dialogOpen = false; _refocus(); }
+  }
+
   Future<void> _editRow(int index) async {
     final original = rack.rows[index];
     final c = TextEditingController(text: original.barcode);
@@ -548,14 +612,16 @@ Future<void> _addLocation() async {
     _refocus();
   },
 ),
-Text('Auditor: ${rack.auditor} · ${rack.date}'),
+GestureDetector(onLongPress: _deleteLocation, child: Padding(
+  padding: const EdgeInsets.symmetric(vertical: 12),
+  child: Text('Location: ${rack.rack} · Auditor: ${rack.auditor} · ${rack.date} (hold to delete)'))),
 ]))),
 const SizedBox(height: 12),
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
           
             TextField(controller: scanInput, focusNode: scanFocus, enabled: !resolving,
-              autofocus: true, keyboardType: TextInputType.none,
+              autofocus: true, keyboardType: TextInputType.text,
               decoration: InputDecoration(prefixIcon: const Icon(Icons.qr_code_scanner),
                 labelText: resolving ? 'Waiting for EAN decision…' : 'Scanner Ready — Scan Here',
                 border: const OutlineInputBorder()),
@@ -563,6 +629,26 @@ const SizedBox(height: 12),
               onSubmitted: _commit),
             const SizedBox(height: 9),
             Text(status, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+            TextButton.icon(
+              onPressed: resolving || dialogOpen ? null : () async {
+                idleTimer?.cancel();
+                scanInput.clear();
+                scanFocus.unfocus();
+                dialogOpen = true;
+                try {
+                  final code = await Navigator.of(context).push<String>(
+                    MaterialPageRoute(builder: (_) => const CameraScanScreen()));
+                  if (!mounted) return;
+                  dialogOpen = false;
+                  if (code != null && code.isNotEmpty) await _processQueued([code]);
+                } finally {
+                  dialogOpen = false;
+                  if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _refocus());
+                }
+              },
+              icon: const Icon(Icons.camera_alt_outlined),
+              label: const Text('Scan with camera'),
+            ),
             TextButton.icon(
               onPressed: resolving ? null : _typeBarcodeManually,
               icon: const Icon(Icons.keyboard_outlined),
@@ -597,7 +683,8 @@ const SizedBox(height: 12),
             title: Text(row.barcode), subtitle: const Text('Tap to edit barcode or quantity'),
             trailing: Text('× ${row.quantity}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            onTap: resolving ? null : () => _editRow(index)));
+            onTap: resolving ? null : () => _editRow(index),
+             onLongPress: resolving ? null : () => _quantitySheet(index)));
         }),
       ]),
     );

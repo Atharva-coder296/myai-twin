@@ -27,10 +27,10 @@ void main() {
     expect(ScanCheck('123456789012', outcome.expectedLength).needsDecision, false);
   });
 
-  test('QR text or URL is not counted as a numeric product', () {
+  test('Nonempty alphanumeric codes are supported and checked for length', () {
     final check = ScanCheck('https://example.com', 13);
-    expect(check.isNumeric, false);
-    expect(check.needsDecision, false);
-    expect(resolveMismatch(check, EanDecision.acceptOnce).accepted, false);
+    expect(check.isNumeric, true);
+    expect(check.needsDecision, true);
+    expect(resolveMismatch(check, EanDecision.acceptOnce).accepted, true);
   });
 }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "347034566625",
+    "project_id": "retailsaudit-dccd8",
+    "storage_bucket": "retailsaudit-dccd8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:347034566625:android:1bb1f57cd9e4ab8536dca0",
+        "android_client_info": {
+          "package_name": "com.retailsaudit.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4r-KFQiSbYqzkeLs2rfDMYVVXe0yni2M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,87 +1,60 @@
 import 'package:flutter/material.dart';
+import '../cloud_accounts.dart';
 import '../main.dart';
 import '../store.dart';
 
 class AuthScreen extends StatefulWidget {
   final RetailStore store;
   const AuthScreen({super.key, required this.store});
-  @override
-  State<AuthScreen> createState() => _AuthScreenState();
+  @override State<AuthScreen> createState() => _AuthScreenState();
 }
-
 class _AuthScreenState extends State<AuthScreen> {
-  final id = TextEditingController(text: RetailStore.primaryAdminId);
+  final id = TextEditingController();
   final password = TextEditingController();
-  final confirm = TextEditingController();
   bool busy = false;
-  bool obscure = true;
-  @override
-  void dispose() { id.dispose(); password.dispose(); confirm.dispose(); super.dispose(); }
-
+  @override void dispose() { id.dispose(); password.dispose(); super.dispose(); }
   Future<void> submit() async {
     if (busy) return;
     setState(() => busy = true);
-    try {
-      if (!widget.store.hasAccounts) {
-        if (password.text != confirm.text) throw ArgumentError('Passwords do not match');
-        if (password.text.length < 10) throw ArgumentError('Use at least 10 characters');
-        await widget.store.setUpPrimaryAdmin(password.text);
-        await widget.store.signIn(RetailStore.primaryAdminId, password.text);
-      } else {
-        if (!await widget.store.signIn(id.text, password.text)) {
-          throw StateError('Incorrect User ID or password');
-        }
-      }
-    } catch (e) {
-      if (mounted) showFailure(context, e);
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
+    try { await CloudAccounts.signIn(id.text, password.text); }
+    catch (e) { if (mounted) showFailure(context, 'Cloud sign-in failed: $e'); }
+    finally { if (mounted) setState(() => busy = false); }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final setup = !widget.store.hasAccounts;
-    return Scaffold(body: SafeArea(child: Center(child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 480),
+  @override Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(child: Center(child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
       child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(24), children: [
-        const CircleAvatar(radius: 39, child: Icon(Icons.inventory_2_outlined, size: 39)),
-        const SizedBox(height: 15),
-        Text('RetailSAudit', textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w800)),
-        const Text('The Retail Audit & Allied Services', textAlign: TextAlign.center),
-        const SizedBox(height: 25),
-        Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(setup ? 'Create Primary Admin' : 'Sign in',
-            style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 15),
-          if (setup) ...[
-            const Text('Primary Admin ID: RetailSAudit', style: TextStyle(fontWeight: FontWeight.bold)),
-            const Text('Admin/report email: retailsaudit@gmail.com'),
-            const SizedBox(height: 12),
-          ] else ...[
-            TextField(controller: id, decoration: const InputDecoration(labelText: 'User ID or email')),
-            const SizedBox(height: 12),
-          ],
-          TextField(controller: password, obscureText: obscure,
-            decoration: InputDecoration(labelText: setup ? 'Create password' : 'Password',
-              suffixIcon: IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
-                onPressed: () => setState(() => obscure = !obscure)))),
-          if (setup) ...[
-            const SizedBox(height: 12),
-            TextField(controller: confirm, obscureText: obscure,
-                decoration: const InputDecoration(labelText: 'Confirm password')),
-          ],
-          const SizedBox(height: 16),
-          actionButton(busy ? 'Please wait…' : setup ? 'Create Admin Account' : 'Sign In',
-            busy ? () {} : submit, icon: Icons.lock_open),
-        ]))),
-        const SizedBox(height: 15),
-        const Text('LOCAL DEMONSTRATION • Accounts and reports currently stay on this device. '
-          'The production release requires Firebase authentication and cloud-backed permissions.',
-          textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
+        Container(width: 80, height: 80, alignment: Alignment.center,
+          decoration: BoxDecoration(color: const Color(0xFF142B49),
+            borderRadius: BorderRadius.circular(23)),
+          child: const Icon(Icons.inventory_2_rounded, size: 42, color: Color(0xFF74E5DC))),
+        const SizedBox(height: 26),
+        Text('Welcome back', style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+          fontWeight: FontWeight.w900)),
+        const SizedBox(height: 6),
+        Text('Sign in to RetailSAudit', style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 32),
+        const Text('EMAIL ADDRESS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 1)),
+        const SizedBox(height: 9),
+        TextField(controller: id, keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(prefixIcon: Icon(Icons.mail_outline_rounded),
+            hintText: 'employee@example.com')),
+        const SizedBox(height: 20),
+        const Text('PASSWORD', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 1)),
+        const SizedBox(height: 9),
+        TextField(controller: password, obscureText: true,
+          decoration: const InputDecoration(prefixIcon: Icon(Icons.lock_outline_rounded),
+            hintText: 'Enter your password')),
+        const SizedBox(height: 26),
+        FilledButton.icon(onPressed: busy ? null : submit,
+          icon: const Icon(Icons.login_rounded),
+          label: Text(busy ? 'Signing in…' : 'Sign In')),
+        const SizedBox(height: 22),
+        Text('Secure access for authorized RetailSAudit staff',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
       ]),
-    ))));
-  }
+    ))),
+  );
 }

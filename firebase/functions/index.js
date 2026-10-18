@@ -90,3 +90,62 @@ exports.emailThreeReports = onCall(
       throw new HttpsError('unavailable', 'Email delivery failed; check delivery status');
     }
   });
+
+
+// Cloud account administration. Bootstrap the first admin through the Firebase
+// console with Auth + users/{uid} {role:'admin', active:true, orgId:'retailsaudit'}.
+// Never create an admin account from an unauthenticated mobile request.
+function requireId(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{3,48}$/.test(value)) {
+    throw new HttpsError('invalid-argument', 'Invalid employee ID');
+  }
+  return value.toUpperCase();
+}
+async function requireAdmin(auth) {
+  if (!auth) throw new HttpsError('unauthenticated', 'Sign in required');
+  const profile = await admin.firestore().doc(`users/${auth.uid}`).get();
+  if (!profile.exists || profile.data().active !== true || profile.data().role !== 'admin' ||
+      !profile.data().orgId) throw new HttpsError('permission-denied', 'Admin required');
+  return profile.data();
+}
+exports.createEmployee = onCall(async (request) => {
+  const actor = await requireAdmin(request.auth);
+  const id = requireId(request.data?.id);
+  const name = String(request.data?.name || '').trim();
+  const password = String(request.data?.password || '');
+  if (!name || name.length > 120 || password.length < 12) {
+    throw new HttpsError('invalid-argument', 'Name and password (12+ characters) required');
+  }
+  const email = `${id.toLowerCase()}@staff.retailsaudit.invalid`;
+  let user;
+  try {
+    user = await admin.auth().createUser({email, password, displayName: name, disabled: false});
+    await admin.firestore().doc(`users/${user.uid}`).create({
+      id, name, email, orgId: actor.orgId, role: 'employee', active: true,
+      createdBy: request.auth.uid, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    if (user) await admin.auth().deleteUser(user.uid);
+    if (err.code === 'auth/email-already-exists') {
+      throw new HttpsError('already-exists', 'Employee ID already exists');
+    }
+    throw new HttpsError('internal', 'Employee creation failed');
+  }
+  return {uid: user.uid, id};
+});
+exports.suspendEmployee = onCall(async (request) => {
+  const actor = await requireAdmin(request.auth);
+  const uid = String(request.data?.uid || '');
+  if (!/^[A-Za-z0-9_-]{10,128}$/.test(uid) || uid === request.auth.uid) {
+    throw new HttpsError('invalid-argument', 'Invalid employee');
+  }
+  const ref = admin.firestore().doc(`users/${uid}`);
+  const doc = await ref.get();
+  if (!doc.exists || doc.data().orgId !== actor.orgId || doc.data().role !== 'employee') {
+    throw new HttpsError('permission-denied', 'Not an employee in your organization');
+  }
+  await admin.auth().updateUser(uid, {disabled: true});
+  await admin.auth().revokeRefreshTokens(uid);
+  await ref.update({active: false, suspendedAt: admin.firestore.FieldValue.serverTimestamp()});
+  return {suspended: true};
+});

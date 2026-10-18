@@ -2,22 +2,50 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function me() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-    function active() { return signedIn() &&
-      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-      me().active == true; }
+    function myPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function active() { return signedIn() && exists(myPath()) && get(myPath()).data.active == true; }
+    function me() { return get(myPath()).data; }
     function adminUser() { return active() && me().role == 'admin'; }
     function sameOrg(org) { return active() && me().orgId == org; }
 
     match /users/{uid} {
-      allow read: if active() && (request.auth.uid == uid || adminUser());
-      // Only admins can change roles, and only within their own organization.
-      allow create: if adminUser() && request.resource.data.orgId == me().orgId;
-      allow update: if adminUser() && resource.data.orgId == me().orgId &&
-        request.resource.data.orgId == resource.data.orgId;
+      allow get: if active() && (request.auth.uid == uid ||
+        (adminUser() && resource.data.orgId == me().orgId));
+      // Single-organization deployment. Admin can list profiles.
+      allow list: if adminUser();
+      allow create: if adminUser() && uid != request.auth.uid &&
+        request.resource.data.keys().hasOnly([
+          'active', 'role', 'orgId', 'name', 'id', 'email', 'phone'
+        ]) &&
+        request.resource.data.keys().hasAll([
+          'active', 'role', 'orgId', 'name', 'id', 'email', 'phone'
+        ]) &&
+        request.resource.data.active == true &&
+        request.resource.data.role == 'employee' &&
+        request.resource.data.orgId == me().orgId &&
+        request.resource.data.name is string &&
+        request.resource.data.id is string &&
+        request.resource.data.email is string &&
+        request.resource.data.phone is string;
+      allow update: if adminUser() && uid != request.auth.uid &&
+        resource.data.role == 'employee' && resource.data.orgId == me().orgId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active']) &&
+        request.resource.data.active is bool;
       allow delete: if false;
+    }
+    match /presence/{sessionId} {
+      allow read: if adminUser() && resource.data.orgId == me().orgId;
+      allow create: if active() &&
+        request.resource.data.keys().hasOnly(['uid', 'orgId', 'updatedAt', 'deviceId']) &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.orgId == me().orgId &&
+        request.resource.data.deviceId == sessionId &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if active() && resource.data.uid == request.auth.uid &&
+        resource.data.orgId == me().orgId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']) &&
+        request.resource.data.updatedAt == request.time;
+      allow delete: if active() && resource.data.uid == request.auth.uid;
     }
     match /audits/{auditId} {
       allow read: if sameOrg(resource.data.orgId);
@@ -26,10 +54,6 @@ service cloud.firestore {
       allow update: if sameOrg(resource.data.orgId) &&
         request.resource.data.orgId == resource.data.orgId;
       allow delete: if adminUser() && resource.data.orgId == me().orgId;
-    }
-    match /emailDeliveries/{deliveryId} {
-      allow read: if adminUser();
-      allow write: if false; // Cloud Function only.
     }
     match /{document=**} { allow read, write: if false; }
   }

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'models.dart';
 
 class RetailStore extends ChangeNotifier {
@@ -130,7 +131,7 @@ class RetailStore extends ChangeNotifier {
         break;
       }
     }
-    if (found == null) return false;
+    if (found == null || found.suspended) return false;
     final supplied = await _hash(password, found.salt);
     // Constant-time hash comparison (local demo, not a production security boundary).
     final a = base64Decode(supplied), b = base64Decode(found.passwordHash);
@@ -143,7 +144,24 @@ class RetailStore extends ChangeNotifier {
     return true;
   }
 
-  void signOut() { currentUser = null; notifyListeners(); }
+  void setCloudUser(Map<String, dynamic> data) {
+    final id = '${data['id'] ?? ''}';
+    if (currentUser?.id == id && currentUser?.role == data['role']) return;
+    currentUser = Account(id: id, name: '${data['name'] ?? id}',
+      email: '${data['email'] ?? ''}', phone: '',
+      role: '${data['role'] ?? 'employee'}', salt: '', passwordHash: '');
+    WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
+  }
+  void clearCloudUser() {
+    if (currentUser == null) return;
+    currentUser = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
+  }
+  void signOut() {
+    FirebaseAuth.instance.signOut();
+    currentUser = null;
+    notifyListeners();
+  }
 
   Future<String> addAccount({required String name, required String email,
     required String phone, required bool admin, required String password}) async {
@@ -161,6 +179,24 @@ class RetailStore extends ChangeNotifier {
       passwordHash: await _hash(password, salt)));
     await save();
     return id;
+  }
+
+  Future<void> suspendAccount(String id) async {
+    if (!isAdmin) throw StateError('Administrator access required');
+    final account = accounts.firstWhere((a) => a.id == id);
+    if (account.isAdmin) throw StateError('Admin accounts cannot be suspended here');
+    account.suspended = true;
+    await save();
+  }
+
+  Future<void> deleteRack(Audit audit, int index) async {
+    if (index < 0 || index >= audit.racks.length) return;
+    if (audit.racks.length == 1) throw StateError('At least one location is required');
+    audit.racks.removeAt(index);
+    if (identical(draft, audit)) {
+      activeDraftRackIndex = activeDraftRackIndex.clamp(0, audit.racks.length - 1).toInt();
+    }
+    await save();
   }
 
   Future<void> startAudit({required String brand, required String storeCode,
@@ -190,7 +226,7 @@ class RetailStore extends ChangeNotifier {
 
   Future<void> scan({required int rackIndex, required String barcode}) async {
     if (draft == null) throw StateError('No active audit');
-    if (!validBarcode(barcode)) throw ArgumentError('Barcode must be numeric');
+    if (!validBarcode(barcode)) throw ArgumentError('Barcode cannot be empty');
     draft!.racks[rackIndex].scan(barcode);
     await save(); // Always auto-save each scan; disabling this would risk data loss.
   }

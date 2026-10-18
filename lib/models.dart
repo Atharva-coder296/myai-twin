@@ -17,17 +17,18 @@ class Account {
   final String role;
   final String salt;
   final String passwordHash;
-  const Account({required this.id, required this.name, required this.email,
+  bool suspended;
+  Account({required this.id, required this.name, required this.email,
     required this.phone, required this.role, required this.salt,
-    required this.passwordHash});
+    required this.passwordHash, this.suspended = false});
   bool get isAdmin => role == 'admin';
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'email': email,
-    'phone': phone, 'role': role, 'salt': salt, 'passwordHash': passwordHash};
+    'phone': phone, 'role': role, 'salt': salt, 'passwordHash': passwordHash, 'suspended': suspended};
   factory Account.fromJson(Map<String, dynamic> j) => Account(
     id: '${j['id'] ?? ''}', name: '${j['name'] ?? ''}',
     email: '${j['email'] ?? ''}', phone: '${j['phone'] ?? ''}',
     role: '${j['role'] ?? 'employee'}', salt: '${j['salt'] ?? ''}',
-    passwordHash: '${j['passwordHash'] ?? ''}');
+    passwordHash: '${j['passwordHash'] ?? ''}', suspended: j['suspended'] == true);
 }
 
 class CountRow {
@@ -158,6 +159,6 @@ List<VarianceLine> calculateVariance(Audit audit, Iterable<SohRow> soh) {
   return barcodes.map((b) => VarianceLine(b, stock[b] ?? 0, physical[b] ?? 0)).toList();
 }
 
-bool validBarcode(String value) => RegExp(r'^\d+$').hasMatch(value);
+bool validBarcode(String value) => value.trim().isNotEmpty;
 
 String prettyJson(Object? value) => const JsonEncoder.withIndent('  ').convert(value);
