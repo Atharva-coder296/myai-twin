@@ -8,7 +8,7 @@ workflows:
       flutter: stable
       xcode: latest
 
-    scripts:
+       scripts:
       - name: Generate Flutter project files
         script: |
           flutter create --platforms=android,ios --org com.retailsaudit --project-name app --no-pub .
@@ -18,6 +18,7 @@ workflows:
 
       - name: Set RetailSAudit name and icon
         script: |
+          python3 -m pip install --user Pillow
           python3 - <<'PY'
           from pathlib import Path
           import shutil
