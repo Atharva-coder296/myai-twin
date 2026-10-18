@@ -263,52 +263,68 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
   }
 
   Future<void> _typeBarcodeManually() async {
-    idleTimer?.cancel();
-    scanInput.clear();
-    scanFocus.unfocus();
-    dialogOpen = true;
-    final barcodeController = TextEditingController();
-    try {
-      final code = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Enter Barcode Manually'),
-          content: TextField(
-            controller: barcodeController,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'Numeric barcode',
-              hintText: 'Type or paste barcode',
-            ),
-            onSubmitted: (value) =>
-                Navigator.pop(dialogContext, value.trim()),
+  if (resolving || dialogOpen) return;
+
+  idleTimer?.cancel();
+  scanInput.clear();
+  scanFocus.unfocus();
+  dialogOpen = true;
+
+  String barcode = '';
+
+  try {
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Enter Barcode Manually'),
+        content: TextFormField(
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(
+            labelText: 'Numeric barcode',
+            hintText: 'Type or paste barcode',
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                dialogContext, barcodeController.text.trim()),
-              child: const Text('Add Item'),
-            ),
-          ],
+          onChanged: (value) {
+            barcode = value.trim();
+          },
+          onFieldSubmitted: (value) {
+            Navigator.of(dialogContext).pop(value.trim());
+          },
         ),
-      );
-      if (!mounted) return;
-      if (code != null && code.isNotEmpty) {
-        dialogOpen = false;
-        await _processQueued([code]);
-      }
-    } finally {
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop(barcode);
+            },
+            child: const Text('Add Item'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (code != null && code.isNotEmpty) {
       dialogOpen = false;
-      barcodeController.dispose();
-      if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _refocus());
+      await _processQueued([code]);
+    }
+  } catch (e) {
+    if (mounted) showFailure(context, e);
+  } finally {
+    dialogOpen = false;
+
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _refocus();
+      });
     }
   }
+}
 
 Future<void> _addLocation() async {
   if (resolving || dialogOpen) return;
