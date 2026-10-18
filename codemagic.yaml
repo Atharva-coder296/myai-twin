@@ -38,7 +38,7 @@ workflows:
           )
           manifest.write_text(text)
 
-          source = Path("assets/retailsaudit_logo.png")
+          source = Path("retailsaudit_logo.png")
           if not source.exists():
               sys.exit(
                   "Missing assets/retailsaudit_logo.png. "
