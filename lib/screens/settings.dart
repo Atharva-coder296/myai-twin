@@ -6,7 +6,7 @@ import '../services/files.dart';
 import '../store.dart';
 import 'reports.dart';
 import 'audit.dart';
-import 'upload.dart';
+import 'employee_registration.dart';
 
 class SettingsScreen extends StatelessWidget {
   final RetailStore store;
@@ -120,9 +120,9 @@ class SettingsScreen extends StatelessWidget {
       ])),
       if (store.isAdmin) group(context, 'Admin Controls', Icons.admin_panel_settings_outlined,
         Column(children: [
-          information('Manage Employees / Add Admin', 'Admin-only registration',
+          information('Add User', 'Register a new employee',
             () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => AddUserScreen(store: store)))),
+              builder: (_) => const EmployeeRegistrationScreen()))),
           information('Primary Admin ID', RetailStore.primaryAdminId,
             () => notice(context, 'Primary Admin',
               'ID: RetailSAudit\nEmail: retailsaudit@gmail.com\n'
