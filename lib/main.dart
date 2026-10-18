@@ -24,18 +24,22 @@ Future<void> main() async {
     )),
   );
   final store = RetailStore();
+  var startupStage = 'loading local audit data';
   try {
     await store.load();
+    startupStage = 'initializing Firebase';
     await Firebase.initializeApp();
     runApp(RetailSAuditApp(store: store));
   } catch (error, stack) {
-    debugPrint('RetailSAudit startup failure: $error\n$stack');
+    debugPrint('RetailSAudit startup failure during $startupStage: $error\n$stack');
     runApp(MaterialApp(home: Scaffold(body: SafeArea(child: Center(
       child: Padding(padding: const EdgeInsets.all(24), child: Column(
         mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.warning_amber_rounded, size: 48),
           const SizedBox(height: 16),
           const Text('RetailSAudit could not start. No audit data has been intentionally erased.', textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text('Failed during: $startupStage', textAlign: TextAlign.center),
           const SizedBox(height: 12),
           FilledButton(onPressed: () => main(), child: const Text('Try Again')),
         ],

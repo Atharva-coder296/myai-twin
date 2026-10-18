@@ -13,6 +13,29 @@ workflows:
         script: |
           flutter create --platforms=android,ios --org com.retailsaudit --project-name app --no-pub .
           cp firebase_android_google_services.json android/app/google-services.json
+          # Register Google Services plugin for Firebase native Android configuration.
+          python3 - <<'PYGRADLE'
+          from pathlib import Path
+          settings = Path('android/settings.gradle.kts')
+          app = Path('android/app/build.gradle.kts')
+          if not settings.exists() or not app.exists():
+              raise SystemExit('Expected Flutter Kotlin Gradle files missing; inspect generated Android project')
+          a = settings.read_text()
+          if 'id("com.google.gms.google-services")' not in a:
+              needle = 'plugins {'
+              if needle not in a:
+                  raise SystemExit('Cannot locate settings.gradle.kts plugins block')
+              a = a.replace(needle, needle + '\n    id("com.google.gms.google-services") version "4.4.2" apply false', 1)
+              settings.write_text(a)
+          b = app.read_text()
+          if 'id("com.google.gms.google-services")' not in b:
+              needle = 'plugins {'
+              if needle not in b:
+                  raise SystemExit('Cannot locate app/build.gradle.kts plugins block')
+              b = b.replace(needle, needle + '\n    id("com.google.gms.google-services")', 1)
+              app.write_text(b)
+          print('Google Services Gradle plugin configured')
+          PYGRADLE
           python3 -c "import json; d=json.load(open('android/app/google-services.json')); assert d['project_info']['project_id']=='retailsaudit-dccd8'; assert d['client'][0]['client_info']['android_client_info']['package_name']=='com.retailsaudit.app'"
           rm -f test/widget_test.dart
           flutter pub get
