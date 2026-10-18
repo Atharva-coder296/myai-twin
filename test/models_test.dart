@@ -3,9 +3,11 @@ import 'package:retailsaudit/models.dart';
 
 void main() {
   group('barcode input', () {
-    test('numeric QR payload uses same product number as barcode', () {
+    test('barcode and QR payloads support nonempty numeric and text values', () {
       expect(validBarcode('8901808000068'), isTrue);
-      expect(validBarcode('https://example.com'), isFalse);
+      expect(validBarcode('https://example.com'), isTrue);
+      expect(validBarcode('SKU-A123'), isTrue);
+      expect(validBarcode('   '), isFalse);
       expect(validBarcode('0012345678901'), isTrue);
     });
   });
