@@ -310,82 +310,130 @@ class _ActiveAuditScreenState extends State<ActiveAuditScreen> {
     }
   }
 
-  Future<void> _addLocation() async {
-    idleTimer?.cancel();
-    scanInput.clear();
-    scanFocus.unfocus();
-    dialogOpen = true;
-    final location = TextEditingController();
-    final auditor = TextEditingController(text: rack.auditor);
-    try {
-      final values = await showDialog<(String, String)>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Add Rack Location'),
-          content: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(
-                controller: location,
-                autofocus: true,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Scan or type rack location'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: auditor,
-                decoration: const InputDecoration(
-                  labelText: 'Auditor (keep or change)'),
-              ),
-            ]),
+Future<void> _addLocation() async {
+  if (resolving || dialogOpen) return;
+
+  idleTimer?.cancel();
+  scanInput.clear();
+  scanFocus.unfocus();
+  dialogOpen = true;
+
+  final formKey = GlobalKey<FormState>();
+  String locationName = '';
+  String auditorName = rack.auditor;
+
+  try {
+    final values = await showDialog<(String, String)>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add Rack Location'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  autofocus: true,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Scan or type rack location',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter a location name';
+                    }
+                    return null;
+                  },
+                  onSaved: (value) {
+                    locationName = value!.trim();
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  initialValue: auditorName,
+                  decoration: const InputDecoration(
+                    labelText: 'Auditor (keep or change)',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter an auditor name';
+                    }
+                    return null;
+                  },
+                  onSaved: (value) {
+                    auditorName = value!.trim();
+                  },
+                ),
+              ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (location.text.trim().isEmpty ||
-                    auditor.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('Enter location and auditor')));
-                  return;
-                }
-                Navigator.pop(dialogContext,
-                    (location.text.trim(), auditor.text.trim()));
-              },
-              child: const Text('Add Location'),
-            ),
-          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+
+              formKey.currentState!.save();
+
+              Navigator.of(dialogContext).pop(
+                (locationName, auditorName),
+              );
+            },
+            child: const Text('Add Location'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || values == null) return;
+
+    if (editingExisting) {
+      audit.racks.add(
+        RackCount(
+          id: newId(),
+          rack: values.$1,
+          auditor: values.$2,
+          date: today(),
         ),
       );
-      if (values == null || !mounted) return;
-      if (editingExisting) {
-        audit.racks.add(RackCount(
-          id: newId(), rack: values.$1,
-          auditor: values.$2, date: today(),
-        ));
-        await widget.store.save();
-      } else {
-        await widget.store.addRack(values.$1, values.$2);
-      }
-      if (!mounted) return;
-      setState(() {
-        rackIndex = audit.racks.length - 1;
-        lastSavedBarcode = null;
-        status = 'Location added: ${values.$1}';
+
+      await widget.store.save();
+    } else {
+      await widget.store.addRack(
+        values.$1,
+        values.$2,
+      );
+      widget.store.setActiveDraftRack(audit.racks.length - 1);
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      rackIndex = audit.racks.length - 1;
+      lastSavedBarcode = null;
+      status = 'Location added: ${values.$1}';
+    });
+  } catch (e) {
+    if (mounted) {
+      showFailure(context, e);
+    }
+  } finally {
+    dialogOpen = false;
+
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _refocus();
       });
-    } catch (e) {
-      if (mounted) showFailure(context, e);
-    } finally {
-      dialogOpen = false;
-      location.dispose();
-      auditor.dispose();
-      if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _refocus());
     }
   }
-
+}
   Future<void> _editRow(int index) async {
     final original = rack.rows[index];
     final c = TextEditingController(text: original.barcode);
